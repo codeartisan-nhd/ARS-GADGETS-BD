@@ -796,5 +796,28 @@ function closeOverlay(id){
 renderProducts();
 renderCardRatings();
 </script>
+<script type="module">
+  // Import the functions you need from the SDKs you need
+  import { initializeApp } from "https://www.gstatic.com/firebasejs/12.16.0/firebase-app.js";
+  import { getAnalytics } from "https://www.gstatic.com/firebasejs/12.16.0/firebase-analytics.js";
+  // TODO: Add SDKs for Firebase products that you want to use
+  // https://firebase.google.com/docs/web/setup#available-libraries
+
+  // Your web app's Firebase configuration
+  // For Firebase JS SDK v7.20.0 and later, measurementId is optional
+  const firebaseConfig = {
+    apiKey: "AIzaSyBMIHWghmvZpnwTYKimqbB0NvbAiyZVBAY",
+    authDomain: "ars-gadgets-bd.firebaseapp.com",
+    projectId: "ars-gadgets-bd",
+    storageBucket: "ars-gadgets-bd.firebasestorage.app",
+    messagingSenderId: "137315499756",
+    appId: "1:137315499756:web:a014b0c442b848f251efc9",
+    measurementId: "G-VZ2PXLQ53S"
+  };
+
+  // Initialize Firebase
+  const app = initializeApp(firebaseConfig);
+  const analytics = getAnalytics(app);
+</script>
 </body>
 </html>
