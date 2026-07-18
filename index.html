@@ -553,17 +553,11 @@ let selectedStars = 5;
 
 function money(n){ return CURRENCY + n.toLocaleString('en-US'); }
 
-/* ===== RATINGS & REVIEWS ===== */
-function loadReviews(){
-  try{ return JSON.parse(localStorage.getItem('ars_reviews') || '{}'); }
-  catch(e){ return {}; }
-}
-function saveReviews(data){
-  localStorage.setItem('ars_reviews', JSON.stringify(data));
-}
+/* ===== RATINGS & REVIEWS (data now lives in Firebase, not localStorage) ===== */
+window.fbReviewsCache = {}; // filled live by the Firebase listener below
+
 function getProductReviews(name){
-  const all = loadReviews();
-  return all[name] || [];
+  return window.fbReviewsCache[name] || [];
 }
 function avgRating(name){
   const revs = getProductReviews(name);
@@ -592,6 +586,15 @@ function renderCardRatings(){
     }
   });
 }
+/* Called by the Firebase listener (bottom of page) every time review data changes,
+   for ANY customer, on ANY device — this is what makes reviews shared/live. */
+window.applyReviewsUpdate = function(cache){
+  window.fbReviewsCache = cache;
+  renderCardRatings();
+  if(activeProductIndex !== null && document.getElementById('detail-overlay').classList.contains('open')){
+    renderReviewsSection(PRODUCTS[activeProductIndex].name);
+  }
+};
 function setStar(v){
   selectedStars = v;
   document.querySelectorAll('#star-picker span').forEach(s => {
@@ -624,21 +627,19 @@ function submitReview(){
     return;
   }
   const p = PRODUCTS[activeProductIndex];
-  const all = loadReviews();
-  if(!all[p.name]) all[p.name] = [];
-  all[p.name].push({
-    name: name,
-    stars: selectedStars,
-    comment: comment,
-    date: new Date().toLocaleDateString('en-GB')
-  });
-  saveReviews(all);
+
+  if (typeof window.saveReview !== 'function') {
+    alert('Still connecting to the server, please wait a moment and try again.');
+    return;
+  }
+  window.saveReview(comment, name, p.name, selectedStars);
+
   document.getElementById('review-name').value = '';
   document.getElementById('review-comment').value = '';
   selectedStars = 5;
   setStar(5);
-  renderReviewsSection(p.name);
-  renderCardRatings();
+  // No manual re-render needed here — the Firebase listener (window.applyReviewsUpdate)
+  // will refresh the review list and ratings for every visitor automatically.
 }
 
 function renderProducts(){
@@ -798,7 +799,7 @@ renderCardRatings();
 </script>
 <script type="module">
   import { initializeApp } from "https://www.gstatic.com/firebasejs/12.16.0/firebase-app.js";
-  import { getDatabase, ref, push } from "https://www.gstatic.com/firebasejs/12.16.0/firebase-database.js";
+  import { getDatabase, ref, push, onValue } from "https://www.gstatic.com/firebasejs/12.16.0/firebase-database.js";
 
   const firebaseConfig = {
     apiKey: "AIzaSyBMIHwghmvZpnwTYKimqbbONvbAiyZVBAY",
@@ -814,17 +815,41 @@ renderCardRatings();
   const app = initializeApp(firebaseConfig);
   const database = getDatabase(app);
 
-  window.saveReview = function(reviewText, customerName) {
+  window.saveReview = function(reviewText, customerName, productName, stars) {
       push(ref(database, 'reviews'), {
           name: customerName,
           review: reviewText,
+          product: productName || null,
+          stars: stars || null,
           timestamp: new Date().toISOString()
-      }).then(() => {
-          alert("Review saved successfully!");
       }).catch((error) => {
-          console.error("Error saving data: ", error);
+          console.error("Error saving review to Firebase: ", error);
+          alert("Review save failed, please check your internet connection and try again.");
       });
   }
+
+  // Live-listen to ALL reviews in the database. Fires immediately on load,
+  // then again automatically whenever ANY customer (on any device) adds a review —
+  // this is what makes reviews visible to every visitor, not just the one who wrote it.
+  onValue(ref(database, 'reviews'), (snapshot) => {
+    const raw = snapshot.val() || {};
+    const cache = {};
+    Object.values(raw).forEach((r) => {
+      if (!r || !r.product) return;
+      if (!cache[r.product]) cache[r.product] = [];
+      cache[r.product].push({
+        name: r.name,
+        stars: r.stars,
+        comment: r.review,
+        date: r.timestamp ? new Date(r.timestamp).toLocaleDateString('en-GB') : ''
+      });
+    });
+    if (typeof window.applyReviewsUpdate === 'function') {
+      window.applyReviewsUpdate(cache);
+    }
+  }, (error) => {
+    console.error("Error reading reviews from Firebase: ", error);
+  });
 </script>
 </body>
 </html>
