@@ -305,6 +305,26 @@
   .cart-total{display:flex;justify-content:space-between;font-weight:700;font-size:18px;margin-top:14px;color:var(--teal-dark);}
   .empty-note{color:#8a7a63;text-align:center;padding:20px 0;font-family:'Inter',sans-serif;}
 
+  /* ===== RATINGS & REVIEWS ===== */
+  .rating-row{display:flex;align-items:center;gap:6px;margin:2px 0 4px;}
+  .stars{color:var(--marigold);font-size:14px;letter-spacing:1px;}
+  .review-count{font-size:12px;color:#8a7a63;font-family:'Inter',sans-serif;}
+  .reviews-section{margin-top:22px;padding-top:16px;border-top:1px dashed var(--line);}
+  .rev-title{font-family:'Inter',sans-serif;font-size:16px;font-weight:700;color:var(--teal-dark);margin-bottom:8px;}
+  .rating-summary{display:flex;align-items:center;gap:8px;margin-bottom:10px;font-family:'Inter',sans-serif;}
+  .rating-summary .stars{font-size:17px;}
+  #review-list{max-height:180px;overflow-y:auto;margin-bottom:14px;}
+  .review-item{border-bottom:1px dashed var(--line);padding:9px 0;}
+  .review-item:last-child{border-bottom:none;}
+  .review-item .rn{font-family:'Inter',sans-serif;font-weight:600;font-size:14px;display:flex;align-items:center;gap:7px;}
+  .review-item .rd{font-size:11px;color:#8a7a63;font-family:'Inter',sans-serif;margin-top:1px;}
+  .review-item .rc{font-size:14px;margin-top:4px;color:#5A4A38;font-family:'Inter',sans-serif;}
+  .write-review{background:var(--cream);border:1px solid var(--line);border-radius:12px;padding:14px;}
+  .star-picker{display:flex;gap:5px;font-size:28px;cursor:pointer;line-height:1;margin-bottom:4px;}
+  .star-picker span{color:#e2d7c0;transition:color .1s ease, transform .1s ease;}
+  .star-picker span:hover{transform:scale(1.12);}
+  .star-picker span.filled{color:var(--marigold);}
+
   @media (prefers-reduced-motion: reduce){
     .blob, .motif, .card{animation:none !important;}
   }
@@ -360,6 +380,23 @@
       <button onclick="changeQty(1)">+</button>
     </div>
     <button class="btn" onclick="addToCartFromModal()">Add to Cart</button>
+
+    <div class="reviews-section">
+      <div class="rev-title">Ratings &amp; Reviews</div>
+      <div class="rating-summary" id="rating-summary"></div>
+      <div id="review-list"></div>
+      <div class="write-review">
+        <label style="margin-top:0;">Your Rating</label>
+        <div class="star-picker" id="star-picker">
+          <span onclick="setStar(1)" data-v="1">★</span><span onclick="setStar(2)" data-v="2">★</span><span onclick="setStar(3)" data-v="3">★</span><span onclick="setStar(4)" data-v="4">★</span><span onclick="setStar(5)" data-v="5">★</span>
+        </div>
+        <label>Your Name</label>
+        <input type="text" id="review-name" placeholder="e.g. Karim">
+        <label>Your Review</label>
+        <textarea id="review-comment" rows="2" placeholder="Share your experience..."></textarea>
+        <button class="btn" style="background:var(--teal);box-shadow:0 6px 16px rgba(15,82,87,.3);" onclick="submitReview()">Submit Review</button>
+      </div>
+    </div>
   </div>
 </div>
 
@@ -512,8 +549,97 @@ document.getElementById('footer-phone').textContent = "+" + WHATSAPP_NUMBER;
 let cart = [];
 let activeProductIndex = null;
 let activeQty = 1;
+let selectedStars = 5;
 
 function money(n){ return CURRENCY + n.toLocaleString('en-US'); }
+
+/* ===== RATINGS & REVIEWS ===== */
+function loadReviews(){
+  try{ return JSON.parse(localStorage.getItem('ars_reviews') || '{}'); }
+  catch(e){ return {}; }
+}
+function saveReviews(data){
+  localStorage.setItem('ars_reviews', JSON.stringify(data));
+}
+function getProductReviews(name){
+  const all = loadReviews();
+  return all[name] || [];
+}
+function avgRating(name){
+  const revs = getProductReviews(name);
+  if(revs.length === 0) return 0;
+  return revs.reduce((s,r)=>s+r.stars,0) / revs.length;
+}
+function starsHTML(n){
+  const full = Math.round(n);
+  return '★'.repeat(full) + '☆'.repeat(5 - full);
+}
+function escapeHTML(str){
+  const div = document.createElement('div');
+  div.textContent = str;
+  return div.innerHTML;
+}
+function renderCardRatings(){
+  PRODUCTS.forEach((p, i) => {
+    const el = document.getElementById('rating-row-' + i);
+    if(!el) return;
+    const revs = getProductReviews(p.name);
+    if(revs.length === 0){
+      el.innerHTML = `<span class="review-count">No reviews yet</span>`;
+    } else {
+      const avg = avgRating(p.name);
+      el.innerHTML = `<span class="stars">${starsHTML(avg)}</span><span class="review-count">${avg.toFixed(1)} (${revs.length})</span>`;
+    }
+  });
+}
+function setStar(v){
+  selectedStars = v;
+  document.querySelectorAll('#star-picker span').forEach(s => {
+    s.classList.toggle('filled', parseInt(s.dataset.v) <= v);
+  });
+}
+function renderReviewsSection(name){
+  const revs = getProductReviews(name);
+  const summaryEl = document.getElementById('rating-summary');
+  const listEl = document.getElementById('review-list');
+  if(revs.length === 0){
+    summaryEl.innerHTML = `<span class="review-count">No reviews yet — be the first!</span>`;
+  } else {
+    const avg = avgRating(name);
+    summaryEl.innerHTML = `<span class="stars">${starsHTML(avg)}</span> <strong>${avg.toFixed(1)}</strong> <span class="review-count">(${revs.length} review${revs.length > 1 ? 's' : ''})</span>`;
+  }
+  listEl.innerHTML = revs.slice().reverse().map(r => `
+    <div class="review-item">
+      <div class="rn">${escapeHTML(r.name)} <span class="stars" style="font-size:13px;">${starsHTML(r.stars)}</span></div>
+      <div class="rd">${r.date}</div>
+      <div class="rc">${escapeHTML(r.comment)}</div>
+    </div>
+  `).join('');
+}
+function submitReview(){
+  const name = document.getElementById('review-name').value.trim();
+  const comment = document.getElementById('review-comment').value.trim();
+  if(!name || !comment){
+    alert('Please enter your name and your review.');
+    return;
+  }
+  const p = PRODUCTS[activeProductIndex];
+  const all = loadReviews();
+  if(!all[p.name]) all[p.name] = [];
+  all[p.name].push({
+    name: name,
+    stars: selectedStars,
+    comment: comment,
+    date: new Date().toLocaleDateString('en-GB')
+  });
+  saveReviews(all);
+  document.getElementById('review-name').value = '';
+  document.getElementById('review-comment').value = '';
+  selectedStars = 5;
+  setStar(5);
+  renderReviewsSection(p.name);
+  renderCardRatings();
+}
 
 function renderProducts(){
   const grid = document.getElementById('product-grid');
@@ -528,6 +654,7 @@ function renderProducts(){
       ${p.badge ? `<div class="stamp">${p.badge}</div>` : ""}
       <div class="card-body">
         <h3>${p.name}</h3>
+        <div class="rating-row" id="rating-row-${i}"></div>
         <div class="price">${money(p.price)}</div>
         <button class="add-btn" onclick="event.stopPropagation(); quickAdd(${i})">Add to Cart</button>
       </div>
@@ -559,6 +686,11 @@ function openDetail(i){
   document.getElementById('detail-price').textContent = money(p.price);
   document.getElementById('detail-desc').textContent = p.desc || "";
   document.getElementById('detail-qty').textContent = activeQty;
+  selectedStars = 5;
+  setStar(5);
+  document.getElementById('review-name').value = '';
+  document.getElementById('review-comment').value = '';
+  renderReviewsSection(p.name);
   document.getElementById('detail-overlay').classList.add('open');
 }
 
@@ -662,6 +794,7 @@ function closeOverlay(id){
 }
 
 renderProducts();
+renderCardRatings();
 </script>
 </body>
 </html>
